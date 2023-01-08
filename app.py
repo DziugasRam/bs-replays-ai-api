@@ -1,9 +1,12 @@
+from data_processing import get_map_json
 from flask import Flask
 from flask import request
 from flask_cors import CORS
 from flask_caching import Cache
+from http_client import get_bl_leadeboard
 from infer_publish import getDiffLabel, getMapComplexityForHits4, getMultiplierForAcc2, predictHitsForMap, predictHitsForMapFull
 from data_processing_stats import get_map_stats
+from tech_calc import techCalculation
 
 
 config = {
@@ -22,7 +25,7 @@ CORS(app)
 
 @app.after_request
 def add_header(response):
-    response.cache_control.max_age = 0
+    response.cache_control.max_age = 60*60
     return response
 
 @app.route("/")
@@ -132,6 +135,25 @@ def api_get_map_stats(hash, mode, diff):
     if res is None:
         return "Not found"
     return res
+
+
+
+@app.route('/bl-leaderboard/<hash>/<diff>/<mode>')
+@cache.cached()
+def api_get_map_leaderboard(hash, diff, mode):
+    bl_leaderboard = get_bl_leadeboard(hash, diff, mode)
+    return bl_leaderboard
+
+
+
+@app.route('/lack-tech-calculator/<hash>/<characteristic>/<diff>')
+@cache.cached()
+def lack_tech_calculator(hash, characteristic, diff):
+    map_json = get_map_json(hash.lower(), characteristic, int(diff))
+    return {
+        "tech": techCalculation(map_json, False)
+    }
+
 
 
 if __name__ == '__main__':

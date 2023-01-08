@@ -264,3 +264,26 @@ def preprocess_map(hash, difficulty, time_scale, fixed_time_distance, fixed_njs)
     segments, predictions = create_segments(notes)
     return segments, predictions, songName
 
+
+def get_map_json(hash, characteristic, difficulty):
+    download_map(hash)
+
+    map_info_files = []
+    map_info_files.extend(glob.glob(f'{maps_dir}/{hash}/Info.dat'))
+    map_info_files.extend(glob.glob(f'{maps_dir}/{hash}/info.dat'))
+    map_info_file = map_info_files[0]
+
+    with open(map_info_file, "r", encoding="utf8", errors="ignore") as f:
+        file_content = f.read()
+        map_info = json.loads(file_content)
+
+        for beatmap_set in map_info["_difficultyBeatmapSets"]:
+            if beatmap_set["_beatmapCharacteristicName"] != characteristic:
+                continue
+
+            for beatmap in beatmap_set["_difficultyBeatmaps"]:
+                if beatmap["_difficultyRank"] == difficulty:
+                    map_file_name = beatmap["_beatmapFilename"]
+                    with open(map_info_file.replace("Info.dat", map_file_name), "r", encoding="utf8", errors="ignore") as map_file:
+                        map_file_content = map_file.read()
+                        return json.loads(map_file_content)

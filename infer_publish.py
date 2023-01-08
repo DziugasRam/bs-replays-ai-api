@@ -298,7 +298,7 @@ def getMapComplexityForHits4(accs, speeds):
     top_comp = 0
     
     for i in range(max(len(complexities)-window_size, 1)):
-        if i % skip_window != 1:
+        if i % skip_window != 0:
             continue
         window = sorted(complexities[i:i+window_size], reverse=True)
         curr = sum(window[skip_window:top_window])/(min(top_window-skip_window, len(window)))
