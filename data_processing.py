@@ -28,6 +28,7 @@ def read_json_file(file):
 
 def get_replay_notes(replay, njs, time_scale, fixed_time_distance, fixed_njs):
     notes = []
+    note_times = []
 
     prev_zero_note_time = 0
     prev_one_note_time = 0
@@ -57,13 +58,15 @@ def get_replay_notes(replay, njs, time_scale, fixed_time_distance, fixed_njs):
             note = preprocess_note(prediction, delta_to_zero,
                                    delta_to_one, note_info, njs, time_scale, fixed_time_distance, fixed_njs)
             notes.append(note)
+            note_times.append(note_time)
         if type == "1":
             prev_one_note_time = note_time
             note = preprocess_note(prediction, delta_to_one,
                                    delta_to_zero, note_info, njs, time_scale, fixed_time_distance, fixed_njs)
             notes.append(note)
+            note_times.append(note_time)
 
-    return notes
+    return notes, note_times
 
 
 def preprocess_note(prediction, delta, delta_other, note_info, map_data, time_scale, fixed_time_distance, fixed_njs):
@@ -260,9 +263,9 @@ def preprocess_map(hash, difficulty, time_scale, fixed_time_distance, fixed_njs)
     asd = [(note_time, note_info, [0, 0, 0])
            for note_time, note_info in map_notes]
 
-    notes = get_replay_notes(asd, (njs, 0, 0), time_scale, fixed_time_distance, fixed_njs)
+    notes, note_times = get_replay_notes(asd, (njs, 0, 0), time_scale, fixed_time_distance, fixed_njs)
     segments, predictions = create_segments(notes)
-    return segments, predictions, songName
+    return segments, predictions, songName, note_times
 
 
 def get_map_json(hash, characteristic, difficulty):

@@ -84,7 +84,7 @@ def getTopScore(hash, difficulty):
 def predictHitsForMap(hash, difficulties, exclude_dots, time_scale = 1, fixed_time_distance = None, fixed_njs = None):
     try:
         for difficulty in difficulties:
-            segments, scores, songName = preprocess_map(hash, difficulty, time_scale, fixed_time_distance, fixed_njs)
+            segments, scores, songName, note_times = preprocess_map(hash, difficulty, time_scale, fixed_time_distance, fixed_njs)
             if len(segments) == 0:
                 continue
 
@@ -114,7 +114,7 @@ def predictHitsForMap(hash, difficulties, exclude_dots, time_scale = 1, fixed_ti
 def predictHitsForMapFull(hash, difficulties, time_scale = 1, fixed_time_distance = None, fixed_njs = None):
     try:
         for difficulty in difficulties:
-            segments, scores, songName = preprocess_map(hash, difficulty, time_scale, fixed_time_distance, fixed_njs)
+            segments, scores, songName, note_times = preprocess_map(hash, difficulty, time_scale, fixed_time_distance, fixed_njs)
             if len(segments) == 0:
                 continue
 
@@ -122,7 +122,7 @@ def predictHitsForMapFull(hash, difficulties, time_scale = 1, fixed_time_distanc
             predictions_arrays_speed = model_speed.predict(np.array(segments), verbose=0)
 
             notes = []
-
+            note_times_iterator = 0
             for batch_pred, batch_pred_speed, batch_inp in zip(predictions_arrays_acc, predictions_arrays_speed, segments):
                 for pred, pred_speed, inp in zip(batch_pred, batch_pred_speed, batch_inp[pre_segment_size:-post_segment_size]):
                     if sum(inp) == 0.0:
@@ -133,7 +133,9 @@ def predictHitsForMapFull(hash, difficulties, time_scale = 1, fixed_time_distanc
                         "speed": round(float(pred_speed[0]), 5),
                         "note_color": 0 if sum(inp[:4*3+10]) > 1 else 1,
                         "is_dot": 1 if inp[4*3 + 8] == 1 or inp[4*3 + 10 + 4*3 + 8] == 1 else 0,
+                        "note_time": note_times[note_times_iterator]
                     })
+                    note_times_iterator += 1
                     
             
             yield songName, hash, difficulty, notes

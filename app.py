@@ -12,7 +12,7 @@ from tech_calc import techCalculation
 config = {
     "DEBUG": False,
     "CACHE_TYPE": "FileSystemCache",
-    "CACHE_DEFAULT_TIMEOUT": 60*60*12,
+    "CACHE_DEFAULT_TIMEOUT": 60*60*30,
     "CACHE_DIR": "cache-and-stuff"
 }
 
