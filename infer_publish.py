@@ -81,10 +81,10 @@ def getTopScore(hash, difficulty):
     return score/max_score, player_name, age
 
 
-def predictHitsForMap(hash, difficulties, exclude_dots, time_scale = 1, fixed_time_distance = None, fixed_njs = None):
+def predictHitsForMap(hash, characteristic, difficulties, exclude_dots, time_scale = 1, fixed_time_distance = None, fixed_njs = None):
     try:
         for difficulty in difficulties:
-            segments, scores, songName, note_times = preprocess_map(hash, difficulty, time_scale, fixed_time_distance, fixed_njs)
+            segments, scores, songName, note_times = preprocess_map(hash, characteristic, difficulty, time_scale, fixed_time_distance, fixed_njs)
             if len(segments) == 0:
                 continue
 
@@ -111,10 +111,10 @@ def predictHitsForMap(hash, difficulties, exclude_dots, time_scale = 1, fixed_ti
         print(hash, difficulties)
 
 
-def predictHitsForMapFull(hash, difficulties, time_scale = 1, fixed_time_distance = None, fixed_njs = None):
+def predictHitsForMapFull(hash, characteristic, difficulties, time_scale = 1, fixed_time_distance = None, fixed_njs = None):
     try:
         for difficulty in difficulties:
-            segments, scores, songName, note_times = preprocess_map(hash, difficulty, time_scale, fixed_time_distance, fixed_njs)
+            segments, scores, songName, note_times = preprocess_map(hash, characteristic, difficulty, time_scale, fixed_time_distance, fixed_njs)
             if len(segments) == 0:
                 continue
 

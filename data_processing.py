@@ -211,7 +211,10 @@ note_size = 56
 segment_size = pre_segment_size + post_segment_size + prediction_size
 
 
-def get_map_data(hash, difficulty):
+def get_map_data(hash, characteristic, difficulty):
+    if characteristic is None:
+        characteristic = "Standard"
+
     map_info_files = []
     map_info_files.extend(glob.glob(f'{maps_dir}/{hash}/Info.dat'))
     map_info_files.extend(glob.glob(f'{maps_dir}/{hash}/info.dat'))
@@ -228,7 +231,7 @@ def get_map_data(hash, difficulty):
         songName = map_info["_songName"]
 
         for beatmap_set in map_info["_difficultyBeatmapSets"]:
-            if beatmap_set["_beatmapCharacteristicName"] != "Standard":
+            if beatmap_set["_beatmapCharacteristicName"] != characteristic:
                 continue
 
             for beatmap in beatmap_set["_difficultyBeatmaps"]:
@@ -251,11 +254,11 @@ def get_hash(beatsaver_key):
     return hash
 
 
-def preprocess_map(hash, difficulty, time_scale, fixed_time_distance, fixed_njs):
+def preprocess_map(hash, characteristic, difficulty, time_scale, fixed_time_distance, fixed_njs):
     download_map(hash)
     
     empty_response = ([], [], "")
-    njs, map_notes, songName = get_map_data(hash, difficulty)
+    njs, map_notes, songName = get_map_data(hash, characteristic, difficulty)
     if njs == None or map_notes == None:
         return empty_response
 

@@ -47,7 +47,7 @@ def simple_hash(hash):
     results = ""
     # ignore_dots = True
     ignore_dots = True if request.args.get('ignore-dots') == "True" else False
-    for mapName, hash, difficulty, accs, speeds in predictHitsForMap(hash.lower(), [1, 3, 5, 7, 9], ignore_dots):
+    for mapName, hash, difficulty, accs, speeds in predictHitsForMap(hash.lower(), None, [1, 3, 5, 7, 9], ignore_dots):
         diffLabel = getDiffLabel(difficulty)
         sr, expected_acc, passing_sr, acc2 = getMapComplexityForHits4(accs, speeds)
         base = getMultiplierForAcc2(0.96)
@@ -62,9 +62,9 @@ def simple_hash(hash):
 
 @app.route('/json/<hash>/<diff>/basic')
 @cache.cached(query_string=True)
-def json_basic(hash, diff):
+def json_basic_deprecated(hash, diff):
     ignore_dots = True if request.args.get('ignore-dots') == "True" else False
-    for mapName, hash, difficulty, accs, speeds in predictHitsForMap(hash.lower(), [int(diff)], ignore_dots):
+    for mapName, hash, difficulty, accs, speeds in predictHitsForMap(hash.lower(), None, [int(diff)], ignore_dots):
         sr, expected_acc, passing_sr, acc2 = getMapComplexityForHits4(accs, speeds)
         
         base = getMultiplierForAcc2(0.96)
@@ -78,16 +78,55 @@ def json_basic(hash, diff):
     return "Not found"
 
 
-@app.route('/json/<hash>/<diff>/full/time-scale/<scale>')
+@app.route('/json/<hash>/<characteristic>/<diff>/basic')
 @cache.cached(query_string=True)
-def json_full(hash, diff, scale):
-    # ignore_dots = True
+def json_basic(hash, characteristic, diff):
     ignore_dots = True if request.args.get('ignore-dots') == "True" else False
-    for mapName, hash, difficulty, notes in predictHitsForMapFull(hash.lower(), [int(diff)], float(scale)):
+    for mapName, hash, difficulty, accs, speeds in predictHitsForMap(hash.lower(), characteristic, [int(diff)], ignore_dots):
+        sr, expected_acc, passing_sr, acc2 = getMapComplexityForHits4(accs, speeds)
         
-        return notes
-    
+        base = getMultiplierForAcc2(0.96)
+        curr_mult = base/getMultiplierForAcc2(acc2)
+        
+        return {
+            "balanced": normalize_sr(sr),
+            "passing_difficulty": normalize_passing_sr(passing_sr),
+            "expected_acc": expected_acc,
+        }
     return "Not found"
+
+
+@app.route('/json/<hash>/<characteristic>/<diff>/full/time-scale/<scale>')
+@cache.cached(query_string=True)
+def json_full(hash, characteristic, diff, scale):
+    full_notes = []
+    basic_stats = {
+		"balanced": 0,
+        "passing_difficulty": 0,
+        "acc": 0,
+        "speed": 0,
+        "tech": 0
+	}
+    
+    for mapName, hash, difficulty, notes in predictHitsForMapFull(hash.lower(), characteristic, [int(diff)], float(scale)):
+        
+        full_notes = notes
+    
+    for mapName, hash, difficulty, accs, speeds in predictHitsForMap(hash.lower(), characteristic, [int(diff)], False, float(scale)):
+        sr, expected_acc, passing_sr, acc2 = getMapComplexityForHits4(accs, speeds)
+        
+        basic_stats["balanced"] = normalize_sr(sr)
+        basic_stats["passing_difficulty"] = normalize_passing_sr(passing_sr)
+        basic_stats["acc"] = (sum(accs)/len(accs)*15+100)/115
+        basic_stats["speed"] = sum(speeds)/len(speeds)
+
+    map_json = get_map_json(hash.lower(), characteristic, int(diff))
+    basic_stats["tech"] = techCalculation(map_json, False)
+		
+    return {
+        "stats": basic_stats,
+		"notes": full_notes,
+    }
 
 
 
@@ -95,11 +134,8 @@ def json_full(hash, diff, scale):
 @cache.cached(query_string=True)
 def json_time_scale(hash, diff, scale):
     ignore_dots = True if request.args.get('ignore-dots') == "True" else False
-    for mapName, hash, difficulty, accs, speeds in predictHitsForMap(hash.lower(), [int(diff)], ignore_dots, float(scale)):
+    for mapName, hash, difficulty, accs, speeds in predictHitsForMap(hash.lower(), None, [int(diff)], ignore_dots, float(scale)):
         sr, expected_acc, passing_sr, acc2 = getMapComplexityForHits4(accs, speeds)
-        
-        base = getMultiplierForAcc2(0.96)
-        curr_mult = base/getMultiplierForAcc2(acc2)
         
         return {
             "balanced": normalize_sr(sr),
@@ -113,7 +149,7 @@ def json_time_scale(hash, diff, scale):
 @cache.cached(query_string=True)
 def json_fixed_time(hash, diff, time, njs):
     ignore_dots = True if request.args.get('ignore-dots') == "True" else False
-    for mapName, hash, difficulty, accs, speeds in predictHitsForMap(hash.lower(), [int(diff)], ignore_dots, 1, float(time), float(njs)):
+    for mapName, hash, difficulty, accs, speeds in predictHitsForMap(hash.lower(), None, [int(diff)], ignore_dots, 1, float(time), float(njs)):
         sr, expected_acc, passing_sr, acc2 = getMapComplexityForHits4(accs, speeds)
         
         base = getMultiplierForAcc2(0.96)
