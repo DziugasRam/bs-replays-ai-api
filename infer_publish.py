@@ -121,20 +121,23 @@ def predictHitsForMapFull(hash, characteristic, difficulties, time_scale = 1, fi
             predictions_arrays_acc = model_acc.predict(np.array(segments), verbose=0)
             predictions_arrays_speed = model_speed.predict(np.array(segments), verbose=0)
 
-            notes = []
+            notes = {
+				"columns": ["acc", "speed", "note_color", "is_dot", "note_time"],
+				"rows": []
+			}
             note_times_iterator = 0
             for batch_pred, batch_pred_speed, batch_inp in zip(predictions_arrays_acc, predictions_arrays_speed, segments):
                 for pred, pred_speed, inp in zip(batch_pred, batch_pred_speed, batch_inp[pre_segment_size:-post_segment_size]):
                     if sum(inp) == 0.0:
                         continue
                     
-                    notes.append({
-                        "acc": round(float(pred[0]), 5),
-                        "speed": round(float(pred_speed[0]), 5),
-                        "note_color": 0 if sum(inp[:4*3+10]) > 1 else 1,
-                        "is_dot": 1 if inp[4*3 + 8] == 1 or inp[4*3 + 10 + 4*3 + 8] == 1 else 0,
-                        "note_time": note_times[note_times_iterator]
-                    })
+                    notes["rows"].append([
+                        round(float(pred[0]), 5),
+                        round(float(pred_speed[0]), 5),
+                        0 if sum(inp[:4*3+10]) > 1 else 1,
+                        1 if inp[4*3 + 8] == 1 or inp[4*3 + 10 + 4*3 + 8] == 1 else 0,
+                        note_times[note_times_iterator]
+                    ])
                     note_times_iterator += 1
                     
             
