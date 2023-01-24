@@ -81,7 +81,7 @@ def getTopScore(hash, difficulty):
     return score/max_score, player_name, age
 
 
-def predictHitsForMap(hash, characteristic, difficulties, exclude_dots, time_scale = 1, fixed_time_distance = None, fixed_njs = None):
+def predictHitsForMap(hash, characteristic, difficulties, exclude_dots, time_scale = 1, fixed_time_distance = None, fixed_njs = None, skip_speed = False):
     try:
         for difficulty in difficulties:
             segments, scores, songName, note_times = preprocess_map(hash, characteristic, difficulty, time_scale, fixed_time_distance, fixed_njs)
@@ -89,8 +89,11 @@ def predictHitsForMap(hash, characteristic, difficulties, exclude_dots, time_sca
                 continue
 
             predictions_arrays_acc = model_acc.predict(np.array(segments), verbose=0)
-            predictions_arrays_speed = model_speed.predict(np.array(segments), verbose=0)
-
+            if skip_speed:
+                predictions_arrays_speed = predictions_arrays_acc
+            else:
+                predictions_arrays_speed = model_speed.predict(np.array(segments), verbose=0)
+                
             accs = []
             speeds = []
 
@@ -122,9 +125,9 @@ def predictHitsForMapFull(hash, characteristic, difficulties, time_scale = 1, fi
             predictions_arrays_speed = model_speed.predict(np.array(segments), verbose=0)
 
             notes = {
-				"columns": ["acc", "speed", "note_color", "is_dot", "note_time"],
-				"rows": []
-			}
+                "columns": ["acc", "speed", "note_color", "is_dot", "note_time"],
+                "rows": []
+            }
             note_times_iterator = 0
             for batch_pred, batch_pred_speed, batch_inp in zip(predictions_arrays_acc, predictions_arrays_speed, segments):
                 for pred, pred_speed, inp in zip(batch_pred, batch_pred_speed, batch_inp[pre_segment_size:-post_segment_size]):

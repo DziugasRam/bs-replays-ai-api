@@ -76,7 +76,7 @@ def preprocess_note(prediction, delta, delta_other, note_info, map_data, time_sc
     # no idea if such parameters can be learned by neural networks without adding scaling like I did right here
     delta = delta/time_scale
     delta_other = delta_other/time_scale
-    njs = njs*time_scale
+    njs = min(30, njs*((time_scale+1)/2))
     
     if fixed_time_distance is not None:
         if delta > 0.00001:
@@ -271,7 +271,7 @@ def preprocess_map(hash, characteristic, difficulty, time_scale, fixed_time_dist
     return segments, predictions, songName, note_times
 
 
-def get_map_json(hash, characteristic, difficulty):
+def get_map_info(hash, characteristic, difficulty):
     download_map(hash)
 
     map_info_files = []
@@ -282,6 +282,7 @@ def get_map_json(hash, characteristic, difficulty):
     with open(map_info_file, "r", encoding="utf8", errors="ignore") as f:
         file_content = f.read()
         map_info = json.loads(file_content)
+        bpm = map_info["_beatsPerMinute"]
 
         for beatmap_set in map_info["_difficultyBeatmapSets"]:
             if beatmap_set["_beatmapCharacteristicName"] != characteristic:
@@ -292,4 +293,4 @@ def get_map_json(hash, characteristic, difficulty):
                     map_file_name = beatmap["_beatmapFilename"]
                     with open(map_info_file.replace("Info.dat", map_file_name), "r", encoding="utf8", errors="ignore") as map_file:
                         map_file_content = map_file.read()
-                        return json.loads(map_file_content)
+                        return { "map_json": json.loads(map_file_content), "bpm": bpm }

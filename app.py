@@ -1,4 +1,4 @@
-from data_processing import get_map_json
+from data_processing import get_map_info
 from flask import Flask
 from flask import request
 from flask_cors import CORS
@@ -6,11 +6,11 @@ from flask_caching import Cache
 from http_client import get_bl_leadeboard
 from infer_publish import getDiffLabel, getMapComplexityForHits4, getMultiplierForAcc2, predictHitsForMap, predictHitsForMapFull
 from data_processing_stats import get_map_stats
-from tech_calc import techCalculation
+from tech_calc import mapCalculation
 
 
 config = {
-    "DEBUG": False,
+    "DEBUG": True,
     "CACHE_TYPE": "FileSystemCache",
     "CACHE_DEFAULT_TIMEOUT": 60*60*30,
     "CACHE_DIR": "cache-and-stuff"
@@ -101,12 +101,13 @@ def json_basic(hash, characteristic, diff):
 def json_full(hash, characteristic, diff, scale):
     full_notes = []
     basic_stats = {
-		"balanced": 0,
+        "balanced": 0,
         "passing_difficulty": 0,
         "acc": 0,
         "speed": 0,
-        "tech": 0
-	}
+        "lack_tech": 0,
+        "lack_passing_difficulty": 0,
+    }
     
     for mapName, hash, difficulty, notes in predictHitsForMapFull(hash.lower(), characteristic, [int(diff)], float(scale)):
         
@@ -119,13 +120,15 @@ def json_full(hash, characteristic, diff, scale):
         basic_stats["passing_difficulty"] = normalize_passing_sr(passing_sr)
         basic_stats["acc"] = (sum(accs)/len(accs)*15+100)/115
         basic_stats["speed"] = sum(speeds)/len(speeds)
-
-    map_json = get_map_json(hash.lower(), characteristic, int(diff))
-    basic_stats["tech"] = techCalculation(map_json, False)
-		
+        
+    map_info = get_map_info(hash.lower(), characteristic, int(diff))
+    lack_map_calculation = mapCalculation(map_info["map_json"], map_info["bpm"], False, False)
+    basic_stats["lack_tech"] = lack_map_calculation["balanced_tech"]
+    basic_stats["lack_passing_difficulty"] = lack_map_calculation["passing_difficulty"]
+        
     return {
         "stats": basic_stats,
-		"notes": full_notes,
+        "notes": full_notes,
     }
 
 
@@ -183,14 +186,50 @@ def api_get_map_leaderboard(hash, diff, mode):
 
 
 @app.route('/lack-tech-calculator/<hash>/<characteristic>/<diff>')
-@cache.cached()
-def lack_tech_calculator(hash, characteristic, diff):
-    map_json = get_map_json(hash.lower(), characteristic, int(diff))
-    return {
-        "tech": techCalculation(map_json, False)
-    }
+def api_get_lack_tech_calculator(hash, characteristic, diff):
+    map_info = get_map_info(hash.lower(), characteristic, int(diff))
+    return mapCalculation(map_info["map_json"], map_info["bpm"], False, False)
 
 
+
+
+
+
+
+def curveAccMulti(acc):
+    pointList = [[1, 7],[0.999, 5.8],[0.9975, 4.7],[0.995, 3.76],[0.9925, 3.17],[0.99, 2.73],[0.9875, 2.38],[0.985, 2.1],[0.9825, 1.88],[0.98, 1.71],[0.9775, 1.57],[0.975, 1.45],[0.9725, 1.37],[0.97, 1.31],[0.965, 1.20],[0.96, 1.11],[0.955, 1.045],[0.95, 1],[0.94, 0.94],[0.93, 0.885],[0.92, 0.835],[0.91, 0.79],[0.9, 0.75],[0.875, 0.655],[0.85, 0.57],[0.825, 0.51],[0.8, 0.47],[0.75, 0.40],[0.7, 0.34],[0.65, 0.29],[0.6, 0.25],[0.0, 0.0]] # An array of pairs of (ACC, Multiplier)
+    for i in range(0, len(pointList)):
+        if pointList[i][0] <= acc:  # Searches the acc portion of each pair in the array until it finds a pair with a lower acc than the players acc, then breaks
+            break
+    
+    if i == 0:  # Special case for 100% acc scores
+        i = 1
+    
+    middle_dis = (acc - pointList[i-1][0]) / (pointList[i][0] - pointList[i-1][0]) 
+    return pointList[i-1][1] + middle_dis * (pointList[i][1] - pointList[i-1][1])
+
+
+
+@app.route('/bl-reweight/<hash>/<characteristic>/<diff>')
+@cache.cached(query_string=True)
+def api_get_bl_reweight(hash, characteristic, diff):
+	modifiers = [
+		["SS", 0.85],
+		["none", 1],
+		["FS", 1.2],
+		["SFS", 1.5],
+	]
+	results = {}
+	for name, scale in modifiers:
+		AIacc = 0
+		for mapName, hash, difficulty, accs, speeds in predictHitsForMap(hash.lower(), characteristic, [int(diff)], False, skip_speed=True, time_scale=float(scale)):
+			AIacc = (sum(accs)/len(accs)*15+100)/115
+		
+		map_info = get_map_info(hash.lower(), characteristic, int(diff))
+		lack_map_calculation = mapCalculation(map_info["map_json"], map_info["bpm"] * float(scale), False, False)
+
+		results[name] = { "lack_map_calculation": lack_map_calculation, "AIacc": AIacc }
+	return results
 
 if __name__ == '__main__':
     app.run()
