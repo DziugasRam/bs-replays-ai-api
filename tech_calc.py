@@ -15,9 +15,12 @@ left_handed_angle_strain_forehand = 292.5       # 270 + 45 or 292.5
 # 
 # 
 
-def average(lst):   # Returns the averate of a list of integers
+def average(lst, setLen=0):   # Returns the averate of a list of integers
     if len(lst) > 0:
-        return sum(lst) / len(lst)
+        if setLen == 0:
+            return sum(lst) / len(lst)
+        else:
+            return sum(lst) / setLen
     else:
         return 0
 def bernstein_poly(i, n, t):    # For later
@@ -281,7 +284,7 @@ def parityPredictor(patternData: list, bombData: list, leftOrRight):    # Parses
         testData2 = copy.deepcopy(patternData[p])
         for i in range(0, len(testData1)):  # Build Forehand TestData Build
             if i > 0:
-                if abs(testData1[i]['angle'] - testData1[i-1]['angle']) > 45:     # If angles are too similar, assume reset since a write roll of that degree is crazy
+                if abs(testData1[i]['angle'] - testData1[i-1]['angle']) >= 67.5:     # If angles are too similar, assume reset since a write roll of that degree is crazy
                     testData1[i]['forehand'] = not testData1[i-1]['forehand']
                 else:
                     testData1[i]['forehand'] = testData1[i-1]['forehand']
@@ -289,7 +292,7 @@ def parityPredictor(patternData: list, bombData: list, leftOrRight):    # Parses
                 testData1[0]['forehand'] = True
         for i in range(0, len(testData2)):  # Build Banckhand TestData
             if i > 0:
-                if abs(testData2[i]['angle'] - testData2[i-1]['angle']) > 45:     # Again, if angles are too similar, assume reset since a write roll of that degree is crazy
+                if abs(testData2[i]['angle'] - testData2[i-1]['angle']) >= 67.5:     # = 45 + 22.5
                     testData2[i]['forehand'] = not testData2[i-1]['forehand']
                 else:
                     testData2[i]['forehand'] = testData2[i-1]['forehand']
@@ -311,12 +314,15 @@ def parityPredictor(patternData: list, bombData: list, leftOrRight):    # Parses
         else:
             newPatternData[i]['reset'] = False
     return newPatternData
-def staminaCalc(swingData: list):
-    staminaList: list = []
-    #TODO calculate strain from stamina drain
-
-
-    return staminaList
+def staminaCalc(data: list):
+    swingDiffList = [temp['swingDiff'] for temp in data]
+    swingDiffList.sort(reverse=True)
+    averageDiff = average(swingDiffList[:int(len(swingDiffList) * 0.5)])
+    burstDiff = average(swingDiffList[:min(round(len(swingDiffList) / 8), 1)])
+    if burstDiff == 0:
+        return 0
+    staminaRatio = averageDiff / burstDiff
+    return 1 / (10 + 4**(-64 * (staminaRatio - 0.875))) + 0.9 + staminaRatio / 20
 def swingCurveCalc(swingData: list, leftOrRight, isuser=True):
     if len(swingData) == 0:
         returnDict = {'hitAngleStrain': 0, 'positionComplexity': 0, 'curveComplexityStrain': 0, 'pathAngleStrain': 0}
@@ -359,15 +365,22 @@ def swingCurveCalc(swingData: list, leftOrRight, isuser=True):
             positionComplexity = positionDiff**2
 
         lengthOfList = len(angleChangeList) * (1 - 0.4)             # 0.2 + (1 - 0.8) = 0.4
-        firstIndex = int(len(angleChangeList)*0.2)
-        lastIndex = int(len(angleChangeList)*0.8)
+
+        
         if swingData[i]['reset']:       # If the pattern is a reset, look less far back
-            pathLookback = 0.75                     # 0.5 angle strain = 0.35 or 65% lookback, 0.1 angle strain = 0.5 or 50% lookback
+            pathLookback = 0.9
+            first = 0.5
+            last = 1
         else:
-            pathLookback = 0.50
+            pathLookback = 0.5
+            first = 0.2
+            last = 0.8
+        pathLookbackIndex = int(len(angleList) * pathLookback)
+        firstIndex = int(len(angleChangeList)* first) - 1
+        lastIndex = int(len(angleChangeList)* last) - 1
 
         curveComplexity = abs((lengthOfList * average(angleChangeList[firstIndex:lastIndex]) - 180) / 180)   # The more the angle difference changes from 180, the more complex the path, /180 to normalize between 0 - 1
-        pathAngleStrain = bezierAngleStrainCalc(angleList[int(len(angleList) * pathLookback):], swingData[i]['forehand'], leftOrRight) / len(angleList) * 2
+        pathAngleStrain = bezierAngleStrainCalc(angleList[pathLookbackIndex:], swingData[i]['forehand'], leftOrRight) / len(angleList) * 2
 
         # print(f"positionComplexity {positionComplexity}")
         # print(f"curveComplexity {curveComplexity}")
@@ -378,9 +391,9 @@ def swingCurveCalc(swingData: list, leftOrRight, isuser=True):
         # xpoints = [p[0] for p in points]
         # ypoints = [p[1] for p in points]
         # ax.plot(xvals, yvals, label='curve path')
-        # ax.plot(xpoints, ypoints, "ro")
-        # ax.plot(xvals[int(len(xvals) * (1 - pathLookback))], yvals[int(len(yvals) * (1 - pathLookback))], "ro")
-        # ax.plot([xvals[int(len(xvals) * 0.2)], xvals[int(len(xvals) * 0.8)]], [yvals[int(len(yvals) * 0.2)], yvals[int(len(yvals) * 0.8)]], "ro")
+        # ax.plot(xpoints, ypoints, "ro", label='Control Points')
+        # ax.plot(xvals[int(len(xvals) * pathLookback)], yvals[int(len(yvals) * pathLookback)], "bo", label='pathAngleStrain Start Point')
+        # ax.plot([xvals[int(len(xvals) * first) - 1], xvals[int(len(xvals) * last) - 1]], [yvals[int(len(yvals) * first) - 1], yvals[int(len(yvals) * last) - 1]], 'go', label='curveComplexity Scope')
         # ax.set_xticks(np.linspace(0,1.333333333,5))
         # ax.set_yticks(np.linspace(0,1,4))
         # #plt.xlim(0,1.3333333)
@@ -416,7 +429,7 @@ def diffToPass(swingData, bpm, hand, isuser=True):
     # SSStress = 0             #Sum of swing stress
     # qST = deque()       #List of swing stress
     qDIFF = deque()
-    window = 50       #Adjusts the smoothing window (how many swings get smoothed) (roughly 8 notes to fail)
+    WINDOW = 50       #Adjusts the smoothing window (how many swings get smoothed) (roughly 8 notes to fail)
     difficultyIndex = []
     data = []
     # for i in range(1, len(swingData)):      # Scan all swings, starting from 2nd swing
@@ -455,7 +468,9 @@ def diffToPass(swingData, bpm, hand, isuser=True):
 
     # difficultyIndex.sort(reverse=True)      #Sort list by most difficult
     # return average(difficultyIndex[:int(len(difficultyIndex) * 0.3)])          # Use the top 8 swings averaged as the return
-
+    if len(swingData) == 0:
+        return 0
+    swingData[0]['swingDiff'] = 0
     for i in range(1, len(swingData)):
         distanceDiff = swingData[i]['preDistance'] / (swingData[i]['preDistance'] + 3) + 1
         data.append({'swingSpeed': swingData[i]['frequency'] * distanceDiff * bps})
@@ -464,17 +479,25 @@ def diffToPass(swingData, bpm, hand, isuser=True):
         data[-1]['hitDistance'] = math.sqrt((xHitDist**2) + (yHitDist**2))
         data[-1]['hitDiff'] =  data[-1]['hitDistance'] / (data[-1]['hitDistance'] + 2) + 1
         data[-1]['stress'] = (swingData[i]['angleStrain'] + swingData[i]['pathStrain']) * data[-1]['hitDiff']
-        data[-1]['swingDiff'] = data[-1]['swingSpeed'] * (-1.4**(-data[-1]['swingSpeed']) + 1) * (data[-1]['stress'] / (data[-1]['stress'] + 2) + 1)
+        swingData[i]['swingDiff'] = data[-1]['swingSpeed'] * (-1.4**(-data[-1]['swingSpeed']) + 1) * (data[-1]['stress'] / (data[-1]['stress'] + 2) + 1)
 
-        if i > window:
+        if i > WINDOW:
             qDIFF.popleft()
-        qDIFF.append(data[-1]['swingDiff'])
+        qDIFF.append(swingData[i]['swingDiff'])
         tempList = sorted(qDIFF, reverse=True)
-        windowDiff = average(tempList[:int(len(tempList) * 15 / window)]) * 0.80        # Top 15 notes out of the window
+        windowDiff = average(tempList[:int(len(tempList) * 25 / WINDOW)], 25) * 0.80        # Top 15 notes out of the window
         difficultyIndex.append(windowDiff)
+    
+    if isuser:
+        peakSS = [temp['swingSpeed'] for temp in data]
+        peakSS.sort(reverse=True)
+        print(f"peak {hand} hand speed {average(peakSS[:int(len(peakSS) / 16)])}")
+        print(f"average {hand} hand stress {average([temp['stress'] for temp in data])}")
+
+    
 
     if len(difficultyIndex) > 0:
-        return max(difficultyIndex)
+        return max(difficultyIndex) 
     else:
         return 0
 
@@ -507,16 +530,21 @@ def techOperations(mapData, bpm, isuser=True, verbose=True):
     tech = average(StrainList[int(len(StrainList) * 0.25):])
     passNum = max(diffToPass(LeftSwingData, bpm, 'left', isuser), diffToPass(RightSwingData, bpm, 'right', isuser))
 
+    staminaFactor = average([staminaCalc(LeftSwingData), staminaCalc(RightSwingData)])
+    balanced_pass = passNum * staminaFactor
+
     balanced_tech = tech * (-1.4**(-passNum) + 1)
 
     if verbose:
-        returnDict = {'left': leftVerbose, 'right': rightVerbose, 'tech': tech, 'passing_difficulty': passNum, 'balanced_tech': balanced_tech}
+        returnDict = {'left': leftVerbose, 'right': rightVerbose, 'tech': tech, 'passing_difficulty': passNum, 'balanced_tech': balanced_tech, 'balanced_pass_diff': balanced_pass}
     else:
-        returnDict = {'balanced_tech': balanced_tech, 'passing_difficulty': passNum}
+        returnDict = {'balanced_tech': balanced_tech, 'balanced_pass_diff': balanced_pass}
     if isuser:
         print(f"Calculacted Tech = {tech}")        # Put Breakpoint here if you want to see
+        print(f"Calculacted stamina factor = {staminaFactor}")
         print(f"Calculated pass diff = {passNum}")
         print(f"Calculated balanced tech = {balanced_tech}")
+        print(f"Calculated balanced pass diff = {balanced_pass}")
     return returnDict
 
 def mapCalculation(mapData, bpm, isuser=True, verbose=True):

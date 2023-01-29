@@ -257,7 +257,7 @@ def get_hash(beatsaver_key):
 def preprocess_map(hash, characteristic, difficulty, time_scale, fixed_time_distance, fixed_njs):
     download_map(hash)
     
-    empty_response = ([], [], "")
+    empty_response = ([], [], "", [])
     njs, map_notes, songName = get_map_data(hash, characteristic, difficulty)
     if njs == None or map_notes == None:
         return empty_response

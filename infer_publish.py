@@ -108,7 +108,7 @@ def predictHitsForMap(hash, characteristic, difficulties, exclude_dots, time_sca
                     speeds.append(pred_speed[0])
                     
             
-            yield songName, hash, difficulty, accs, speeds
+            yield songName, hash, difficulty, accs, speeds, note_times
     except Exception as e:
         print(e)
         print(hash, difficulties)
@@ -262,12 +262,56 @@ def getMultiplierForAcc2(acc):
         previousCurvePointMultiplier = curvePointMultiplier
 
 
-def scaleFarmability(multiplier, noteCount, mapLength):
+
+def getMultiplierForAcc(acc):
+    if acc > 1:
+        return 1
+    curve = [
+        [0.0, 0.0], [0.78006, 0.42749], [0.89002, 0.60075], [0.92001, 0.6789], [0.93503, 0.73221], [0.94602, 0.7829], [0.95802, 0.86012], [0.969, 0.9768], [0.97501, 1.08418], [0.982, 1.28215], [0.98701, 1.48803], [0.99151, 1.75057], [0.99501, 2.0565], [0.99999999, 3.069], [1, 1]
+    ]
+    previousCurvePointAcc = 0
+    previousCurvePointMultiplier = 0
+    
+    for curvePointAcc, curvePointMultiplier in curve:
+        if acc <= curvePointAcc:
+            accDiff = (curvePointAcc - previousCurvePointAcc)
+            multiplierDiff = (curvePointMultiplier - previousCurvePointMultiplier)
+            slope = multiplierDiff/accDiff
+            multiplier = previousCurvePointMultiplier + slope * (acc - previousCurvePointAcc)
+            return multiplier
+        
+        previousCurvePointAcc = curvePointAcc
+        previousCurvePointMultiplier = curvePointMultiplier
+        
+
+def getAccForMultiplier(multiplier):
+    curve = [
+        [0.0, 0.0], [0.78006, 0.42749], [0.89002, 0.60075], [0.92001, 0.6789], [0.93503, 0.73221], [0.94602, 0.7829], [0.95802, 0.86012], [0.969, 0.9768], [0.97501, 1.08418], [0.982, 1.28215], [0.98701, 1.48803], [0.99151, 1.75057], [0.99501, 2.0565], [0.99999999, 3.069], [1, 1]
+    ]
+    previousCurvePointMultiplier = 0
+    previousCurvePointAcc = 0
+    
+    for curvePointAcc, curvePointMultiplier in curve:
+        if multiplier <= curvePointMultiplier:
+            multDiff = (curvePointMultiplier - previousCurvePointMultiplier)
+            accDiff = (curvePointAcc - previousCurvePointAcc)
+            slope = accDiff/multDiff
+            acc = previousCurvePointAcc + slope * (multiplier - previousCurvePointMultiplier)
+            return acc
+        
+        previousCurvePointMultiplier = curvePointMultiplier
+        previousCurvePointAcc = curvePointAcc
+
+
+def scaleFarmability(acc, noteCount, mapLength):
     farm_session_length = 30*60
     base_map_length = 60
     base_attempts = farm_session_length/base_map_length
     base_note_count = 200
     base_multiplier = 0.030963633
+    
+    if noteCount > base_note_count * 5:
+        return acc
     
     total_attempts = max(1, farm_session_length/(mapLength))
     attempts_scale = total_attempts/base_attempts
@@ -275,9 +319,8 @@ def scaleFarmability(multiplier, noteCount, mapLength):
     
     note_scaler = (((math.log(note_scale, 0.05)+0.46275642631951835)**2+0.2431278387816179)/2.2641367447629013)/0.20
     attempts_scaler = ((math.log(attempts_scale)+2.7081502061025433)**0.75/2.1110793685981553)
-    if noteCount > base_note_count * 5:
-        return multiplier
-    return multiplier + base_multiplier*(note_scaler*attempts_scaler)
+    multiplier = getMultiplierForAcc(acc) + base_multiplier*(note_scaler*attempts_scaler)
+    return getAccForMultiplier(multiplier)
 
 
 def getComplexity(acc, speed):

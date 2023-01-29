@@ -4,13 +4,13 @@ from flask import request
 from flask_cors import CORS
 from flask_caching import Cache
 from http_client import get_bl_leadeboard
-from infer_publish import getDiffLabel, getMapComplexityForHits4, getMultiplierForAcc2, predictHitsForMap, predictHitsForMapFull
+from infer_publish import getDiffLabel, getMapComplexityForHits4, getMultiplierForAcc2, predictHitsForMap, predictHitsForMapFull, scaleFarmability
 from data_processing_stats import get_map_stats
 from tech_calc import mapCalculation
 
 
 config = {
-    "DEBUG": True,
+    "DEBUG": False,
     "CACHE_TYPE": "FileSystemCache",
     "CACHE_DEFAULT_TIMEOUT": 60*60*30,
     "CACHE_DIR": "cache-and-stuff"
@@ -47,7 +47,7 @@ def simple_hash(hash):
     results = ""
     # ignore_dots = True
     ignore_dots = True if request.args.get('ignore-dots') == "True" else False
-    for mapName, hash, difficulty, accs, speeds in predictHitsForMap(hash.lower(), None, [1, 3, 5, 7, 9], ignore_dots):
+    for mapName, hash, difficulty, accs, speeds, noteTimes in predictHitsForMap(hash.lower(), None, [1, 3, 5, 7, 9], ignore_dots):
         diffLabel = getDiffLabel(difficulty)
         sr, expected_acc, passing_sr, acc2 = getMapComplexityForHits4(accs, speeds)
         base = getMultiplierForAcc2(0.96)
@@ -64,7 +64,7 @@ def simple_hash(hash):
 @cache.cached(query_string=True)
 def json_basic_deprecated(hash, diff):
     ignore_dots = True if request.args.get('ignore-dots') == "True" else False
-    for mapName, hash, difficulty, accs, speeds in predictHitsForMap(hash.lower(), None, [int(diff)], ignore_dots):
+    for mapName, hash, difficulty, accs, speeds, noteTimes in predictHitsForMap(hash.lower(), None, [int(diff)], ignore_dots):
         sr, expected_acc, passing_sr, acc2 = getMapComplexityForHits4(accs, speeds)
         
         base = getMultiplierForAcc2(0.96)
@@ -82,7 +82,7 @@ def json_basic_deprecated(hash, diff):
 @cache.cached(query_string=True)
 def json_basic(hash, characteristic, diff):
     ignore_dots = True if request.args.get('ignore-dots') == "True" else False
-    for mapName, hash, difficulty, accs, speeds in predictHitsForMap(hash.lower(), characteristic, [int(diff)], ignore_dots):
+    for mapName, hash, difficulty, accs, speeds, noteTimes in predictHitsForMap(hash.lower(), characteristic, [int(diff)], ignore_dots):
         sr, expected_acc, passing_sr, acc2 = getMapComplexityForHits4(accs, speeds)
         
         base = getMultiplierForAcc2(0.96)
@@ -113,7 +113,7 @@ def json_full(hash, characteristic, diff, scale):
         
         full_notes = notes
     
-    for mapName, hash, difficulty, accs, speeds in predictHitsForMap(hash.lower(), characteristic, [int(diff)], False, float(scale)):
+    for mapName, hash, difficulty, accs, speeds, noteTimes in predictHitsForMap(hash.lower(), characteristic, [int(diff)], False, float(scale)):
         sr, expected_acc, passing_sr, acc2 = getMapComplexityForHits4(accs, speeds)
         
         basic_stats["balanced"] = normalize_sr(sr)
@@ -123,8 +123,8 @@ def json_full(hash, characteristic, diff, scale):
         
     map_info = get_map_info(hash.lower(), characteristic, int(diff))
     lack_map_calculation = mapCalculation(map_info["map_json"], map_info["bpm"], False, False)
-    basic_stats["lack_tech"] = lack_map_calculation["balanced_tech"]
-    basic_stats["lack_passing_difficulty"] = lack_map_calculation["passing_difficulty"]
+    basic_stats["tech"] = lack_map_calculation["balanced_tech"]
+    basic_stats["lack_passing_difficulty"] = lack_map_calculation["balanced_pass_diff"]
         
     return {
         "stats": basic_stats,
@@ -137,7 +137,7 @@ def json_full(hash, characteristic, diff, scale):
 @cache.cached(query_string=True)
 def json_time_scale(hash, diff, scale):
     ignore_dots = True if request.args.get('ignore-dots') == "True" else False
-    for mapName, hash, difficulty, accs, speeds in predictHitsForMap(hash.lower(), None, [int(diff)], ignore_dots, float(scale)):
+    for mapName, hash, difficulty, accs, speeds, noteTimes in predictHitsForMap(hash.lower(), None, [int(diff)], ignore_dots, float(scale)):
         sr, expected_acc, passing_sr, acc2 = getMapComplexityForHits4(accs, speeds)
         
         return {
@@ -152,7 +152,7 @@ def json_time_scale(hash, diff, scale):
 @cache.cached(query_string=True)
 def json_fixed_time(hash, diff, time, njs):
     ignore_dots = True if request.args.get('ignore-dots') == "True" else False
-    for mapName, hash, difficulty, accs, speeds in predictHitsForMap(hash.lower(), None, [int(diff)], ignore_dots, 1, float(time), float(njs)):
+    for mapName, hash, difficulty, accs, speeds, noteTimes in predictHitsForMap(hash.lower(), None, [int(diff)], ignore_dots, 1, float(time), float(njs)):
         sr, expected_acc, passing_sr, acc2 = getMapComplexityForHits4(accs, speeds)
         
         base = getMultiplierForAcc2(0.96)
@@ -213,23 +213,24 @@ def curveAccMulti(acc):
 @app.route('/bl-reweight/<hash>/<characteristic>/<diff>')
 @cache.cached(query_string=True)
 def api_get_bl_reweight(hash, characteristic, diff):
-	modifiers = [
-		["SS", 0.85],
-		["none", 1],
-		["FS", 1.2],
-		["SFS", 1.5],
-	]
-	results = {}
-	for name, scale in modifiers:
-		AIacc = 0
-		for mapName, hash, difficulty, accs, speeds in predictHitsForMap(hash.lower(), characteristic, [int(diff)], False, skip_speed=True, time_scale=float(scale)):
-			AIacc = (sum(accs)/len(accs)*15+100)/115
-		
-		map_info = get_map_info(hash.lower(), characteristic, int(diff))
-		lack_map_calculation = mapCalculation(map_info["map_json"], map_info["bpm"] * float(scale), False, False)
+    modifiers = [
+        ["SS", 0.85],
+        ["none", 1],
+        ["FS", 1.2],
+        ["SFS", 1.5],
+    ]
+    results = {}
+    for name, scale in modifiers:
+        AIacc = 0
+        for mapName, hash, difficulty, accs, speeds, noteTimes in predictHitsForMap(hash.lower(), characteristic, [int(diff)], False, skip_speed=True, time_scale=float(scale)):
+            AIacc = (sum(accs)/len(accs)*15+100)/115
+            adjustedAIacc = scaleFarmability(AIacc, len(accs), (noteTimes[-1] - noteTimes[0])/60+0.5)
+            AIacc = adjustedAIacc
+        map_info = get_map_info(hash.lower(), characteristic, int(diff))
+        lack_map_calculation = mapCalculation(map_info["map_json"], map_info["bpm"] * float(scale), False, False)
 
-		results[name] = { "lack_map_calculation": lack_map_calculation, "AIacc": AIacc }
-	return results
+        results[name] = { "lack_map_calculation": lack_map_calculation, "AIacc": AIacc }
+    return results
 
 if __name__ == '__main__':
     app.run()
