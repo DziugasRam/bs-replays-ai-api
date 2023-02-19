@@ -76,7 +76,7 @@ def preprocess_note(prediction, delta, delta_other, note_info, map_data, time_sc
     # no idea if such parameters can be learned by neural networks without adding scaling like I did right here
     delta = delta/time_scale
     delta_other = delta_other/time_scale
-    njs = min(30, njs*((time_scale+1)/2))
+    njs = njs*time_scale
     
     if fixed_time_distance is not None:
         if delta > 0.00001:
@@ -86,11 +86,11 @@ def preprocess_note(prediction, delta, delta_other, note_info, map_data, time_sc
 
     if fixed_njs is not None:
         njs = fixed_njs
-        
+
     delta_long = max(0, 2 - delta)/2
     delta_other_long = max(0, 2 - delta_other)/2
-    delta_short = max(0, 1 - delta)
-    delta_other_short = max(0, 1 - delta_other)
+    delta_short = max(0, 0.5 - delta)*2
+    delta_other_short = max(0, 0.5 - delta_other)*2
 
     col_number = int(note_info[0])
     row_number = int(note_info[1])
@@ -99,12 +99,15 @@ def preprocess_note(prediction, delta, delta_other, note_info, map_data, time_sc
 
     row_col = [0] * 4 * 3
     direction = [0] * 10
-
+    
     row_col2 = [0] * 4 * 3
     direction2 = [0] * 10
-
+    
     row_col[col_number * 3 + row_number] = 1
     direction[direction_number] = 1
+
+    # color_arr = [0] * 2
+    # color_arr[color] = 1
 
     response = []
 
@@ -115,15 +118,11 @@ def preprocess_note(prediction, delta, delta_other, note_info, map_data, time_sc
         response.extend(direction2)
         response.extend([
             delta_short,
-            delta_short**2,
             delta_long,
-            delta_long**2,
         ])
         response.extend([
             delta_other_short,
-            delta_other_short**2,
             delta_other_long,
-            delta_other_long**2,
         ])
     if color == 1:
         response.extend(row_col2)
@@ -132,15 +131,11 @@ def preprocess_note(prediction, delta, delta_other, note_info, map_data, time_sc
         response.extend(direction)
         response.extend([
             delta_other_short,
-            delta_other_short**2,
             delta_other_long,
-            delta_other_long**2,
         ])
         response.extend([
             delta_short,
-            delta_short**2,
             delta_long,
-            delta_long**2,
         ])
         
     # response.extend(row_col)
@@ -148,10 +143,7 @@ def preprocess_note(prediction, delta, delta_other, note_info, map_data, time_sc
     # response.extend(color_arr)
 
     response.extend([
-        (30-njs)/30,
         njs/30,
-        ((30-njs)/30)**2,
-        (njs/30)**2,
         prediction
     ])
 
@@ -206,7 +198,7 @@ def create_segments(notes):
 pre_segment_size = 8
 post_segment_size = 8
 prediction_size = 8
-note_size = 56
+note_size = 49
 
 segment_size = pre_segment_size + post_segment_size + prediction_size
 

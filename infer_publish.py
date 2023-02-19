@@ -13,12 +13,8 @@ import requests
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
-def custom_loss(y_true, y_pred):
-    return (tf.abs(y_true - y_pred)**1.5)
-
-model_acc = tf.keras.models.load_model("model_sleep_lstm_acc", custom_objects={"custom_loss": custom_loss})
-model_speed = tf.keras.models.load_model("model_sleep_lstm_speed", custom_objects={"custom_loss": custom_loss})
-
+model_acc = tf.keras.models.load_model("model_sleep_3gru_acc")
+model_speed = tf.keras.models.load_model("model_sleep_3gru_speed")
 
 def getDiffLabel(difficulty):
     diffLabel = difficulty
@@ -87,12 +83,12 @@ def predictHitsForMap(hash, characteristic, difficulties, exclude_dots, time_sca
             segments, scores, songName, note_times = preprocess_map(hash, characteristic, difficulty, time_scale, fixed_time_distance, fixed_njs)
             if len(segments) == 0:
                 continue
-
-            predictions_arrays_acc = model_acc.predict(np.array(segments), verbose=0)
+            model_input = tf.convert_to_tensor(np.array(segments), dtype=tf.float32)
+            predictions_arrays_acc = model_acc.predict(model_input, verbose=0)
             if skip_speed:
                 predictions_arrays_speed = predictions_arrays_acc
             else:
-                predictions_arrays_speed = model_speed.predict(np.array(segments), verbose=0)
+                predictions_arrays_speed = model_speed.predict(model_input, verbose=0)
                 
             accs = []
             speeds = []
@@ -103,7 +99,8 @@ def predictHitsForMap(hash, characteristic, difficulties, exclude_dots, time_sca
                         continue
                     if exclude_dots and (inp[4*3+8] > 0 or inp[4*3+10+4*3+8] > 0):
                         continue
-                    
+                    if pred_speed[0] < 0:
+                        print(inp)
                     accs.append(pred[0])
                     speeds.append(pred_speed[0])
                     
@@ -120,9 +117,9 @@ def predictHitsForMapFull(hash, characteristic, difficulties, time_scale = 1, fi
             segments, scores, songName, note_times = preprocess_map(hash, characteristic, difficulty, time_scale, fixed_time_distance, fixed_njs)
             if len(segments) == 0:
                 continue
-
-            predictions_arrays_acc = model_acc.predict(np.array(segments), verbose=0)
-            predictions_arrays_speed = model_speed.predict(np.array(segments), verbose=0)
+            model_input = tf.convert_to_tensor(np.array(segments), dtype=tf.float32)
+            predictions_arrays_acc = model_acc.predict(model_input, verbose=0)
+            predictions_arrays_speed = model_speed.predict(model_input, verbose=0)
 
             notes = {
                 "columns": ["acc", "speed", "note_color", "is_dot", "note_time"],
@@ -262,13 +259,10 @@ def getMultiplierForAcc2(acc):
         previousCurvePointMultiplier = curvePointMultiplier
 
 
-
 def getMultiplierForAcc(acc):
     if acc > 1:
         return 1
-    curve = [
-        [0.0, 0.0], [0.78006, 0.42749], [0.89002, 0.60075], [0.92001, 0.6789], [0.93503, 0.73221], [0.94602, 0.7829], [0.95802, 0.86012], [0.969, 0.9768], [0.97501, 1.08418], [0.982, 1.28215], [0.98701, 1.48803], [0.99151, 1.75057], [0.99501, 2.0565], [0.99999999, 3.069], [1, 1]
-    ]
+
     previousCurvePointAcc = 0
     previousCurvePointMultiplier = 0
     
@@ -282,16 +276,37 @@ def getMultiplierForAcc(acc):
         
         previousCurvePointAcc = curvePointAcc
         previousCurvePointMultiplier = curvePointMultiplier
+
+
+def getMultiplierForAccScale(acc):
+    if acc > 1:
+        return 1
+    _curve = [
+        [0.0, 0.0], [0.78006, 0.42749], [0.89002, 0.60075], [0.92001, 0.6789], [0.93503, 0.73221], [0.94602, 0.7829], [0.95802, 0.86012], [0.969, 0.9768], [0.97501, 1.08418], [0.982, 1.28215], [0.98701, 1.48803], [0.99151, 1.75057], [0.99501, 2.0565], [0.99999999, 3.069], [1, 1]
+    ]
+    previousCurvePointAcc = 0
+    previousCurvePointMultiplier = 0
+    
+    for curvePointAcc, curvePointMultiplier in _curve:
+        if acc <= curvePointAcc:
+            accDiff = (curvePointAcc - previousCurvePointAcc)
+            multiplierDiff = (curvePointMultiplier - previousCurvePointMultiplier)
+            slope = multiplierDiff/accDiff
+            multiplier = previousCurvePointMultiplier + slope * (acc - previousCurvePointAcc)
+            return multiplier
+        
+        previousCurvePointAcc = curvePointAcc
+        previousCurvePointMultiplier = curvePointMultiplier
         
 
-def getAccForMultiplier(multiplier):
-    curve = [
+def getAccForMultiplierScale(multiplier):
+    _curve = [
         [0.0, 0.0], [0.78006, 0.42749], [0.89002, 0.60075], [0.92001, 0.6789], [0.93503, 0.73221], [0.94602, 0.7829], [0.95802, 0.86012], [0.969, 0.9768], [0.97501, 1.08418], [0.982, 1.28215], [0.98701, 1.48803], [0.99151, 1.75057], [0.99501, 2.0565], [0.99999999, 3.069], [1, 1]
     ]
     previousCurvePointMultiplier = 0
     previousCurvePointAcc = 0
     
-    for curvePointAcc, curvePointMultiplier in curve:
+    for curvePointAcc, curvePointMultiplier in _curve:
         if multiplier <= curvePointMultiplier:
             multDiff = (curvePointMultiplier - previousCurvePointMultiplier)
             accDiff = (curvePointAcc - previousCurvePointAcc)
@@ -303,24 +318,21 @@ def getAccForMultiplier(multiplier):
         previousCurvePointAcc = curvePointAcc
 
 
-def scaleFarmability(acc, noteCount, mapLength):
-    farm_session_length = 30*60
+def scaleFarmability(acc, noteCount, mapLength, farm_session_length=30*60):
     base_map_length = 60
     base_attempts = farm_session_length/base_map_length
     base_note_count = 200
     base_multiplier = 0.030963633
-    
-    if noteCount > base_note_count * 5:
-        return acc
+
     
     total_attempts = max(1, farm_session_length/(mapLength))
     attempts_scale = total_attempts/base_attempts
-    note_scale = (noteCount + 5)/base_note_count # my segment count is in 8 notes, so this is in case I cut off the end of the map
+    note_scale = (noteCount)/base_note_count
     
     note_scaler = (((math.log(note_scale, 0.05)+0.46275642631951835)**2+0.2431278387816179)/2.2641367447629013)/0.20
     attempts_scaler = ((math.log(attempts_scale)+2.7081502061025433)**0.75/2.1110793685981553)
-    multiplier = getMultiplierForAcc(acc) + base_multiplier*(note_scaler*attempts_scaler)
-    return getAccForMultiplier(multiplier)
+    multiplier = getMultiplierForAccScale(acc) + base_multiplier*(note_scaler*attempts_scaler)*(min(1, base_note_count * 2/noteCount))
+    return getAccForMultiplierScale(multiplier)
 
 
 def getComplexity(acc, speed):
@@ -340,7 +352,7 @@ def getExpectedAcc2(acc, speed):
 
 
 def getMapComplexityForHits4(accs, speeds):
-    window_size, top_window, skip_window = (50, 25, 5)
+    window_size, top_window, skip_window = (50, 12, 5)
     complexities = [getComplexity(acc, speed*2) for acc, speed in zip(accs, speeds)]
     expected_accs = [getExpectedAcc1(acc, speed*2) for acc, speed in zip(accs, speeds)]
     expected_accs2 = [getExpectedAcc2(acc, speed*2) for acc, speed in zip(accs, speeds)]

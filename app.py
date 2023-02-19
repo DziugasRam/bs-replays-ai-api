@@ -34,11 +34,11 @@ def index():
 
 
 def normalize_sr(sr):
-    return sr*15/2.56606282-1
+    return sr*14/3.7807760790332994
 
 
 def normalize_passing_sr(sr):
-    return sr*15/3.00357589-1
+    return sr*14/4.319542203926959
 
 
 @app.route('/<hash>')
@@ -74,6 +74,8 @@ def json_basic_deprecated(hash, diff):
             "balanced": normalize_sr(sr),
             "passing_difficulty": normalize_passing_sr(passing_sr),
             "expected_acc": expected_acc,
+            "speed": sum(speeds)/len(speeds),
+            "square_root_speed": (sum([s**2 for s in speeds])/len(speeds))**0.5
         }
     return "Not found"
 
@@ -92,6 +94,28 @@ def json_basic(hash, characteristic, diff):
             "balanced": normalize_sr(sr),
             "passing_difficulty": normalize_passing_sr(passing_sr),
             "expected_acc": expected_acc,
+            "speed": sum(speeds)/len(speeds),
+            "square_root_speed": (sum([s**2 for s in speeds])/len(speeds))**0.5
+        }
+    return "Not found"
+
+
+@app.route('/json/<hash>/<characteristic>/<diff>/adjust-farming/<farmminutes>')
+@cache.cached(query_string=True)
+def json_adjust_farming(hash, characteristic, diff, farmminutes):
+    ignore_dots = True if request.args.get('ignore-dots') == "True" else False
+    for mapName, hash, difficulty, accs, speeds, noteTimes in predictHitsForMap(hash.lower(), characteristic, [int(diff)], ignore_dots):
+        sr, expected_acc, passing_sr, acc2 = getMapComplexityForHits4(accs, speeds)
+
+        AIacc = (sum(accs)/len(accs)*15+100)/115
+        adjustedAIacc = scaleFarmability(AIacc, len(accs), (noteTimes[-1] - noteTimes[0])/60+0.25, farm_session_length=int(farmminutes)*60)
+        
+        return {
+            "balanced": normalize_sr(sr),
+            "passing_difficulty": normalize_passing_sr(passing_sr),
+            "expected_acc": adjustedAIacc,
+            "speed": sum(speeds)/len(speeds),
+            "square_root_speed": (sum([s**2 for s in speeds])/len(speeds))**0.5
         }
     return "Not found"
 
@@ -144,24 +168,25 @@ def json_time_scale(hash, diff, scale):
             "balanced": normalize_sr(sr),
             "passing_difficulty": normalize_passing_sr(passing_sr),
             "expected_acc": expected_acc,
+            "speed": sum(speeds)/len(speeds),
+            "square_root_speed": (sum([s**2 for s in speeds])/len(speeds))**0.5
         }
     return "Not found"
 
 
-@app.route('/json/<hash>/<diff>/fixed-time/<time>/<njs>')
+@app.route('/json/<hash>/<diff>/time-scale/<scale>/<njs>')
 @cache.cached(query_string=True)
-def json_fixed_time(hash, diff, time, njs):
+def json_time_scale_njs(hash, diff, scale, njs):
     ignore_dots = True if request.args.get('ignore-dots') == "True" else False
-    for mapName, hash, difficulty, accs, speeds, noteTimes in predictHitsForMap(hash.lower(), None, [int(diff)], ignore_dots, 1, float(time), float(njs)):
+    for mapName, hash, difficulty, accs, speeds, noteTimes in predictHitsForMap(hash.lower(), None, [int(diff)], ignore_dots, float(scale), fixed_njs=float(njs)):
         sr, expected_acc, passing_sr, acc2 = getMapComplexityForHits4(accs, speeds)
-        
-        base = getMultiplierForAcc2(0.96)
-        curr_mult = base/getMultiplierForAcc2(acc2)
         
         return {
             "balanced": normalize_sr(sr),
             "passing_difficulty": normalize_passing_sr(passing_sr),
             "expected_acc": expected_acc,
+            "speed": sum(speeds)/len(speeds),
+            "square_root_speed": (sum([s**2 for s in speeds])/len(speeds))**0.5
         }
     return "Not found"
 
@@ -224,7 +249,7 @@ def api_get_bl_reweight(hash, characteristic, diff):
         AIacc = 0
         for mapName, hash, difficulty, accs, speeds, noteTimes in predictHitsForMap(hash.lower(), characteristic, [int(diff)], False, skip_speed=True, time_scale=float(scale)):
             AIacc = (sum(accs)/len(accs)*15+100)/115
-            adjustedAIacc = scaleFarmability(AIacc, len(accs), (noteTimes[-1] - noteTimes[0])/60+0.5)
+            adjustedAIacc = scaleFarmability(AIacc, len(accs), (noteTimes[-1] - noteTimes[0])/60+0.25)
             AIacc = adjustedAIacc
         map_info = get_map_info(hash.lower(), characteristic, int(diff))
         lack_map_calculation = mapCalculation(map_info["map_json"], map_info["bpm"] * float(scale), False, False)
