@@ -89,7 +89,9 @@ def predictHitsForMap(hash, characteristic, difficulties, exclude_dots, time_sca
                 predictions_arrays_speed = predictions_arrays_acc
             else:
                 predictions_arrays_speed = model_speed.predict(model_input, verbose=0)
-                
+
+            tf.keras.backend.clear_session()
+
             accs = []
             speeds = []
 
@@ -120,6 +122,8 @@ def predictHitsForMapFull(hash, characteristic, difficulties, time_scale = 1, fi
             model_input = tf.convert_to_tensor(np.array(segments), dtype=tf.float32)
             predictions_arrays_acc = model_acc.predict(model_input, verbose=0)
             predictions_arrays_speed = model_speed.predict(model_input, verbose=0)
+
+            tf.keras.backend.clear_session()
 
             notes = {
                 "columns": ["acc", "speed", "note_color", "is_dot", "note_time"],
