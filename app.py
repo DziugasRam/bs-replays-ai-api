@@ -108,7 +108,7 @@ def json_adjust_farming(hash, characteristic, diff, farmminutes):
         sr, expected_acc, passing_sr, acc2 = getMapComplexityForHits4(accs, speeds)
 
         AIacc = (sum(accs)/len(accs)*15+100)/115
-        adjustedAIacc = scaleFarmability(AIacc, len(accs), (noteTimes[-1] - noteTimes[0])/60+0.25, farm_session_length=int(farmminutes)*60)
+        adjustedAIacc = scaleFarmability(AIacc, len(accs), (noteTimes[-1] - noteTimes[0])+15, farmSessionLength=int(farmminutes)*60)
         
         return {
             "balanced": normalize_sr(sr),
@@ -249,7 +249,7 @@ def api_get_bl_reweight(hash, characteristic, diff):
         AIacc = 0
         for mapName, hash, difficulty, accs, speeds, noteTimes in predictHitsForMap(hash.lower(), characteristic, [int(diff)], False, skip_speed=True, time_scale=float(scale)):
             AIacc = (sum(accs)/len(accs)*15+100)/115
-            adjustedAIacc = scaleFarmability(AIacc, len(accs), (noteTimes[-1] - noteTimes[0])/60+0.25)
+            adjustedAIacc = scaleFarmability(AIacc, len(accs), (noteTimes[-1] - noteTimes[0])+15)
             AIacc = adjustedAIacc
         map_info = get_map_info(hash.lower(), characteristic, int(diff))
         lack_map_calculation = mapCalculation(map_info["map_json"], map_info["bpm"] * float(scale), False, False)
