@@ -238,6 +238,7 @@ def curveAccMulti(acc):
 @app.route('/bl-reweight/<hash>/<characteristic>/<diff>')
 @cache.cached(query_string=True)
 def api_get_bl_reweight(hash, characteristic, diff):
+    skip_pass_tech = True if request.args.get('skip-pass-tech') == "True" else False
     modifiers = [
         ["SS", 0.85],
         ["none", 1],
@@ -251,8 +252,11 @@ def api_get_bl_reweight(hash, characteristic, diff):
             AIacc = (sum(accs)/len(accs)*15+100)/115
             adjustedAIacc = scaleFarmability(AIacc, len(accs), (noteTimes[-1] - noteTimes[0])+15)
             AIacc = adjustedAIacc
-        map_info = get_map_info(hash.lower(), characteristic, int(diff))
-        lack_map_calculation = mapCalculation(map_info["map_json"], map_info["bpm"] * float(scale), False, False)
+        if skip_pass_tech:
+            lack_map_calculation = {}
+        else:
+            map_info = get_map_info(hash.lower(), characteristic, int(diff))
+            lack_map_calculation = mapCalculation(map_info["map_json"], map_info["bpm"] * float(scale), False, False)
 
         results[name] = { "lack_map_calculation": lack_map_calculation, "AIacc": AIacc }
     return results
