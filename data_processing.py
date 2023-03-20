@@ -1,13 +1,7 @@
-import os
 from http_client import download_map
 import numpy as np
 import glob
 import json
-import requests
-
-from io import BytesIO
-import urllib
-from zipfile import ZipFile
 
 
 maps_dir = "/home/maps"
@@ -26,26 +20,15 @@ def read_json_file(file):
         print(file)
 
 
-def get_replay_notes(replay, njs, time_scale, fixed_time_distance, fixed_njs):
+def preprocess_map_notes(map_notes, njs, time_scale):
     notes = []
     note_times = []
 
     prev_zero_note_time = 0
     prev_one_note_time = 0
-    # for note_info, score, note_time in sorted(replay, key=lambda item: item[2]):
 
-    for note_time, note_info, prediction in replay:
+    for note_time, note_info in map_notes:
         type = note_info[-1]
-        score, pre, post = prediction
-
-        # TODO: use map data for note positions and timings to not have to exclude misses (misses are registered much later, which messes up the timings)
-        if score < 0:
-            continue
-
-        # NOTE: 0-100 score range is rare and often happens for tracking problems that are not important here
-        # would be good to replace this with acc component only and potentially learn all both acc and swing angles
-        # but need different format replay files for that
-        # score = max(0, score - 100)
 
         delta_to_zero = note_time - prev_zero_note_time
         delta_to_one = note_time - prev_one_note_time
@@ -55,37 +38,22 @@ def get_replay_notes(replay, njs, time_scale, fixed_time_distance, fixed_njs):
 
         if type == "0":
             prev_zero_note_time = note_time
-            note = preprocess_note(prediction, delta_to_zero,
-                                   delta_to_one, note_info, njs, time_scale, fixed_time_distance, fixed_njs)
+            note = preprocess_note(delta_to_zero, delta_to_one, note_info, njs, time_scale)
             notes.append(note)
             note_times.append(note_time)
         if type == "1":
             prev_one_note_time = note_time
-            note = preprocess_note(prediction, delta_to_one,
-                                   delta_to_zero, note_info, njs, time_scale, fixed_time_distance, fixed_njs)
+            note = preprocess_note(delta_to_one, delta_to_zero, note_info, njs, time_scale)
             notes.append(note)
             note_times.append(note_time)
 
     return notes, note_times
 
 
-def preprocess_note(prediction, delta, delta_other, note_info, map_data, time_scale, fixed_time_distance, fixed_njs):
-    njs, age, rank = map_data
-
-    # NOTE: timing increases difficulty not linearly and caps out at ~2 seconds
-    # no idea if such parameters can be learned by neural networks without adding scaling like I did right here
+def preprocess_note(delta, delta_other, note_info, njs, time_scale):
     delta = delta/time_scale
     delta_other = delta_other/time_scale
     njs = njs*time_scale
-    
-    if fixed_time_distance is not None:
-        if delta > 0.00001:
-            delta = fixed_time_distance
-        if delta_other > 0.00001:
-            delta_other = fixed_time_distance
-
-    if fixed_njs is not None:
-        njs = fixed_njs
 
     delta_long = max(0, 2 - delta)/2
     delta_other_long = max(0, 2 - delta_other)/2
@@ -143,8 +111,7 @@ def preprocess_note(prediction, delta, delta_other, note_info, map_data, time_sc
     # response.extend(color_arr)
 
     response.extend([
-        njs/30,
-        prediction
+        njs/30
     ])
 
     return response
@@ -156,7 +123,6 @@ def create_segments(notes):
         return empty_res
 
     segments = []
-    predictions = []
     for i in range(len(notes)-prediction_size+1):
         if i % prediction_size != 0:
             continue
@@ -169,20 +135,18 @@ def create_segments(notes):
         # NOTE: using relative score can be good to find relative difficulty of the notes more fairly
         # because good players will always get higher acc and worse players will do badly even on easy patterns
 
-        pre_segment = [np.array(note[:-1]) for note in pre_slice]
+        pre_segment = [np.array(note) for note in pre_slice]
         if len(pre_segment) < pre_segment_size:
             pre_segment[0:0] = [np.zeros(note_size, dtype=np.float32) for i in range(
                 pre_segment_size - len(pre_segment))]
 
-        segment = [np.array(note[:-1]) for note in slice]
+        segment = [np.array(note) for note in slice]
 
-        post_segment = [np.array(note[:-1]) for note in post_slice]
+        post_segment = [np.array(note) for note in post_slice]
         if len(post_segment) < post_segment_size:
             post_segment.extend([np.zeros(note_size, dtype=np.float32)
                                 for i in range(post_segment_size - len(post_segment))])
 
-        # fix this pls
-        prediction = [note[-1][0] for note in slice]
 
         final_segment = []
         final_segment.extend(pre_segment)
@@ -190,9 +154,7 @@ def create_segments(notes):
         final_segment.extend(post_segment)
         segments.append(final_segment)
 
-        predictions.append(prediction)
-
-    return segments, predictions
+    return segments
 
 
 pre_segment_size = 12
@@ -239,14 +201,7 @@ def get_map_data(hash, characteristic, difficulty):
     return njs, map_notes, songName
 
 
-
-def get_hash(beatsaver_key):
-    r = requests.get(url=f"https://beatsaver.com/api/maps/id/{beatsaver_key}")
-    hash = r.json()["versions"][0]["hash"]
-    return hash
-
-
-def preprocess_map(hash, characteristic, difficulty, time_scale, fixed_time_distance, fixed_njs):
+def preprocess_map(hash, characteristic, difficulty, time_scale):
     download_map(hash)
     
     empty_response = ([], [], "", [])
@@ -254,13 +209,9 @@ def preprocess_map(hash, characteristic, difficulty, time_scale, fixed_time_dist
     if njs == None or map_notes == None:
         return empty_response
 
-    # note time, note info, saber speeds, scores
-    asd = [(note_time, note_info, [0, 0, 0])
-           for note_time, note_info in map_notes]
-
-    notes, note_times = get_replay_notes(asd, (njs, 0, 0), time_scale, fixed_time_distance, fixed_njs)
-    segments, predictions = create_segments(notes)
-    return segments, predictions, songName, note_times
+    notes, note_times = preprocess_map_notes(map_notes, njs, time_scale)
+    segments = create_segments(notes)
+    return segments, songName, note_times
 
 
 def get_map_info(hash, characteristic, difficulty):

@@ -32,20 +32,12 @@ def download_map(hash):
     with urllib.request.urlopen(req) as zipresp:
         with ZipFile(BytesIO(zipresp.read())) as zfile:
             zfile.extractall(map_dir)
-            song_file = glob.glob(f"{map_dir}/*gg")[0]
-            try:
-                os.remove(song_file)
-            except:
-                return
-
-def get_bl_leadeboard(hash, diff, mode):
-    bl_url = f"https://api.beatleader.xyz/leaderboards/hash/{hash}"
-    r = requests.get(url = bl_url)
-    bl_data = r.json()
-    for difficulty in bl_data['song']['difficulties']:
-        if difficulty['difficultyName'] == diff and difficulty['modeName'].replace("Solo", "") == mode.replace("Solo", ""):
-            song_mode = difficulty['mode']
-            value = difficulty['value']
-            song_id = bl_data['song']['id']
-            return f"https://www.beatleader.xyz/leaderboard/global/{song_id}{value}{song_mode}"
-            
+            extracted_files = glob.glob(f"{map_dir}/*")
+            for extracted_file in extracted_files:
+                if extracted_file.endswith(".dat"):
+                    continue
+                else:
+                    try:
+                        os.remove(extracted_file)
+                    except:
+                        continue
