@@ -165,6 +165,54 @@ note_size = 49
 segment_size = pre_segment_size + post_segment_size + prediction_size
 
 
+direction_to_angle = {
+    0: 180,
+    1: 0,
+    2: 90,
+    3: 270,
+    4: 135,
+    5: 225,
+    6: 45,
+    7: 315
+}
+
+angle_to_direction = {
+    180:0,
+    0:1,
+    90:2,
+    270:3,
+    135:4,
+    225:5,
+    45:6,
+    315:7
+}
+
+def get_note_direction(direction, angle):
+    if direction == 8:
+        return 8
+    
+    note_angle = (direction_to_angle[direction] - round(angle/45)*45) % 360
+    return angle_to_direction[note_angle]
+
+
+def get_map_notes_from_json(map_json, bpm_time_scale):
+    if map_json["version"] == "3.0.0":
+        map_notes = sorted(list(map(lambda n: (n["b"]*bpm_time_scale, f"{n['x']}{n['y']}{get_note_direction(n['d'], n['a'])}{n['c']}"), filter(
+                            lambda n: n['c'] == 1 or n['c'] == 0, map_json["colorNotes"]))), key=lambda x: (x[0], x[1]))
+    else:
+        map_notes = sorted(list(map(lambda n: (n["_time"]*bpm_time_scale, f"{n['_lineIndex']}{n['_lineLayer']}{n['_cutDirection']}{n['_type']}"), filter(
+                            lambda n: n['_type'] == 1 or n['_type'] == 0, map_json["_notes"]))), key=lambda x: (x[0], x[1]))
+    return map_notes
+
+
+def get_free_points_for_map(map_json):
+    if map_json["version"] == "3.0.0" and map_json["burstSliders"]:
+        segment_count = sum([burst_slider["sc"] for burst_slider in map_json["burstSliders"]])
+        return segment_count*20*8
+    else:
+        return 0
+
+
 def get_map_data(hash, characteristic, difficulty):
     if characteristic is None:
         characteristic = "Standard"
@@ -181,7 +229,7 @@ def get_map_data(hash, characteristic, difficulty):
         file_content = f.read()
         map_info = json.loads(file_content)
         bpm = map_info["_beatsPerMinute"]
-        time_scale = 60/bpm
+        bpm_time_scale = 60/bpm
         songName = map_info["_songName"]
 
         for beatmap_set in map_info["_difficultyBeatmapSets"]:
@@ -194,24 +242,24 @@ def get_map_data(hash, characteristic, difficulty):
                     map_file_name = beatmap["_beatmapFilename"]
                     with open(map_info_file.replace("Info.dat", map_file_name), "r", encoding="utf8", errors="ignore") as map_file:
                         map_file_content = map_file.read()
-                        map_file_json = json.loads(map_file_content)
-                        map_notes = sorted(list(map(lambda n: (n["_time"]*time_scale, f"{n['_lineIndex']}{n['_lineLayer']}{n['_cutDirection']}{n['_type']}"), filter(
-                            lambda n: n['_type'] == 1 or n['_type'] == 0, map_file_json["_notes"]))), key=lambda x: (x[0], x[1]))
+                        map_json = json.loads(map_file_content)
+                        map_notes = get_map_notes_from_json(map_json, bpm_time_scale)
+                        free_points = get_free_points_for_map(map_json)
 
-    return njs, map_notes, songName
+    return njs, map_notes, songName, free_points
 
 
 def preprocess_map(hash, characteristic, difficulty, time_scale):
     download_map(hash)
     
     empty_response = ([], [], "", [])
-    njs, map_notes, songName = get_map_data(hash, characteristic, difficulty)
+    njs, map_notes, songName, free_points = get_map_data(hash, characteristic, difficulty)
     if njs == None or map_notes == None:
         return empty_response
 
     notes, note_times = preprocess_map_notes(map_notes, njs, time_scale)
     segments = create_segments(notes)
-    return segments, songName, note_times
+    return segments, songName, note_times, free_points
 
 
 def get_map_info(hash, characteristic, difficulty):

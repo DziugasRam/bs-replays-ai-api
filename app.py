@@ -37,8 +37,8 @@ def api_get_rating(hash, characteristic, diff, timescale):
 
 @cache.memoize()
 def get_bl_ratings(hash, characteristic, diff, timescale):
-    accs, noteTimes = predictHitsForMap(hash.lower(), characteristic, int(diff), exclude_dots=False, time_scale=float(timescale))
-    AIacc = getMapAccForHits(accs)
+    accs, noteTimes, free_points = predictHitsForMap(hash.lower(), characteristic, int(diff), exclude_dots=False, time_scale=float(timescale))
+    AIacc = getMapAccForHits(accs, free_points)
     adjustedAIacc = scaleFarmability(AIacc, len(accs), (noteTimes[-1] - noteTimes[0])+15)
     AIacc = adjustedAIacc
 

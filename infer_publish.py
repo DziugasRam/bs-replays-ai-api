@@ -53,20 +53,26 @@ def getMaxScoreForNotes(note_count):
     return totalScore
 
 
-def getMapAccForHits(hits):
-    totalMultipliers = 0
+def getMapAccForHits(hits, free_points):
+    maxScore = 0
     totalScore = 0
     
     for i, hit in enumerate(hits):
         multiplier = getMultiplierForCombo(i + 1)
-        totalScore += ((hit*15+100)/115) * multiplier
-        totalMultipliers += multiplier
+        totalScore += (hit*15+100) * multiplier
+        maxScore += multiplier*115
     
-    return totalScore/totalMultipliers
+    totalScore += free_points
+    maxScore += free_points
+    
+    if maxScore == 0:
+        return 0
+    
+    return totalScore/maxScore
 
 
 def predictHitsForMap(hash, characteristic, difficulty, exclude_dots, time_scale = 1):
-    segments, songName, note_times = preprocess_map(hash, characteristic, difficulty, time_scale)
+    segments, songName, note_times, free_points = preprocess_map(hash, characteristic, difficulty, time_scale)
     if len(segments) == 0:
         return [], []
     
@@ -90,7 +96,7 @@ def predictHitsForMap(hash, characteristic, difficulty, exclude_dots, time_scale
             
             accs.append(max(0, float(pred[0])))
 
-    return accs, note_times
+    return accs, note_times, free_points
 
 
 scaleCurve = [
