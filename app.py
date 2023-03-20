@@ -1,32 +1,18 @@
 from data_processing import get_map_info
-from flask import Flask
 from flask import request
-from flask_cors import CORS
-from flask_caching import Cache
 from http_client import get_bl_leadeboard
 from infer_publish import getDiffLabel, getMapComplexityForHits4, getMultiplierForAcc2, predictHitsForMap, predictHitsForMapFull, scaleFarmability
 from data_processing_stats import get_map_stats
 from tech_calc import mapCalculation
 
-
-config = {
-    "DEBUG": False,
-    "CACHE_TYPE": "FileSystemCache",
-    "CACHE_DEFAULT_TIMEOUT": 60*60*30,
-    "CACHE_DIR": "cache-and-stuff"
-}
-
-app = Flask(__name__)
-
-app.config.from_mapping(config)
-cache = Cache(app)
-
-CORS(app)
+from setup_flask import app
+from setup_flask import cache
 
 @app.after_request
 def add_header(response):
     response.cache_control.max_age = 60*60
     return response
+
 
 @app.route("/")
 def index():
@@ -34,11 +20,11 @@ def index():
 
 
 def normalize_sr(sr):
-    return sr*14/3.7807760790332994
+    return sr*14/3.91626042
 
 
 def normalize_passing_sr(sr):
-    return sr*14/4.319542203926959
+    return sr*14/4.48108065
 
 
 @app.route('/<hash>')
@@ -56,7 +42,7 @@ def simple_hash(hash):
             
         results += result
     if results == "":
-        return "Not found"
+        return "Not found", 404
     return results
 
 
@@ -77,7 +63,7 @@ def json_basic_deprecated(hash, diff):
             "speed": sum(speeds)/len(speeds),
             "square_root_speed": (sum([s**2 for s in speeds])/len(speeds))**0.5
         }
-    return "Not found"
+    return "Not found", 404
 
 
 @app.route('/json/<hash>/<characteristic>/<diff>/basic')
@@ -97,7 +83,7 @@ def json_basic(hash, characteristic, diff):
             "speed": sum(speeds)/len(speeds),
             "square_root_speed": (sum([s**2 for s in speeds])/len(speeds))**0.5
         }
-    return "Not found"
+    return "Not found", 404
 
 
 @app.route('/json/<hash>/<characteristic>/<diff>/adjust-farming/<farmminutes>')
@@ -117,7 +103,7 @@ def json_adjust_farming(hash, characteristic, diff, farmminutes):
             "speed": sum(speeds)/len(speeds),
             "square_root_speed": (sum([s**2 for s in speeds])/len(speeds))**0.5
         }
-    return "Not found"
+    return "Not found", 404
 
 
 @app.route('/json/<hash>/<characteristic>/<diff>/full/time-scale/<scale>')
@@ -171,7 +157,7 @@ def json_time_scale(hash, diff, scale):
             "speed": sum(speeds)/len(speeds),
             "square_root_speed": (sum([s**2 for s in speeds])/len(speeds))**0.5
         }
-    return "Not found"
+    return "Not found", 404
 
 
 @app.route('/json/<hash>/<diff>/time-scale/<scale>/<njs>')
@@ -188,7 +174,7 @@ def json_time_scale_njs(hash, diff, scale, njs):
             "speed": sum(speeds)/len(speeds),
             "square_root_speed": (sum([s**2 for s in speeds])/len(speeds))**0.5
         }
-    return "Not found"
+    return "Not found", 404
 
 
 
@@ -197,7 +183,7 @@ def json_time_scale_njs(hash, diff, scale, njs):
 def api_get_map_stats(hash, mode, diff):
     res = get_map_stats(hash.lower(), mode, int(diff))
     if res is None:
-        return "Not found"
+        return "Not found", 404
     return res
 
 

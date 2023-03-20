@@ -1,20 +1,22 @@
 import os
 import math
 import datetime
-
 import numpy as np
 import tensorflow as tf
 from data_processing import preprocess_map
 
 from data_processing import pre_segment_size
 from data_processing import post_segment_size
+from setup_flask import cache
 
 import requests
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
-model_acc = tf.keras.models.load_model("model_sleep_3gru_acc")
-model_speed = tf.keras.models.load_model("model_sleep_3gru_speed")
+model_acc = tf.keras.models.load_model("model_sleep_4LSTM_acc")
+model_speed = tf.keras.models.load_model("model_sleep_4LSTM_speed")
+
+batch_size = 16
 
 def getDiffLabel(difficulty):
     diffLabel = difficulty
@@ -76,21 +78,27 @@ def getTopScore(hash, difficulty):
     age = (datetime.datetime.now() - datetime.datetime.strptime(time_set, "%Y-%m-%dT%H:%M:%S.000Z")).days
     return score/max_score, player_name, age
 
-
+@cache.memoize()
 def predictHitsForMap(hash, characteristic, difficulties, exclude_dots, time_scale = 1, fixed_time_distance = None, fixed_njs = None, skip_speed = False):
     try:
         for difficulty in difficulties:
             segments, scores, songName, note_times = preprocess_map(hash, characteristic, difficulty, time_scale, fixed_time_distance, fixed_njs)
             if len(segments) == 0:
                 continue
-            model_input = tf.convert_to_tensor(np.array(segments), dtype=tf.float32)
-            predictions_arrays_acc = model_acc.predict(model_input, verbose=0)
-            if skip_speed:
-                predictions_arrays_speed = predictions_arrays_acc
-            else:
-                predictions_arrays_speed = model_speed.predict(model_input, verbose=0)
-
-            tf.keras.backend.clear_session()
+            
+            predictions_arrays_acc = []
+            predictions_arrays_speed = []
+            
+            for i in range(9999999):
+                batch = np.array(segments[i*batch_size:i*batch_size+batch_size])
+                if len(batch) == 0:
+                    break
+                acc_prediction = model_acc.predict_on_batch(batch)
+                predictions_arrays_acc.extend(acc_prediction)
+                if skip_speed:
+                    predictions_arrays_speed.extend(acc_prediction)
+                else:
+                    predictions_arrays_speed.extend(model_speed.predict_on_batch(batch))
 
             accs = []
             speeds = []
@@ -101,10 +109,11 @@ def predictHitsForMap(hash, characteristic, difficulties, exclude_dots, time_sca
                         continue
                     if exclude_dots and (inp[4*3+8] > 0 or inp[4*3+10+4*3+8] > 0):
                         continue
-                    if pred_speed[0] < 0:
-                        print(inp)
-                    accs.append(pred[0])
-                    speeds.append(pred_speed[0])
+                    # if pred_speed[0] < 0:
+                    #     print(inp)
+                    #     print(pred_speed[0])
+                    accs.append(max(0, float(pred[0])))
+                    speeds.append(max(0, float(pred_speed[0])))
                     
             
             yield songName, hash, difficulty, accs, speeds, note_times
@@ -112,18 +121,23 @@ def predictHitsForMap(hash, characteristic, difficulties, exclude_dots, time_sca
         print(e)
         print(hash, difficulties)
 
-
+@cache.memoize()
 def predictHitsForMapFull(hash, characteristic, difficulties, time_scale = 1, fixed_time_distance = None, fixed_njs = None):
     try:
         for difficulty in difficulties:
             segments, scores, songName, note_times = preprocess_map(hash, characteristic, difficulty, time_scale, fixed_time_distance, fixed_njs)
             if len(segments) == 0:
                 continue
-            model_input = tf.convert_to_tensor(np.array(segments), dtype=tf.float32)
-            predictions_arrays_acc = model_acc.predict(model_input, verbose=0)
-            predictions_arrays_speed = model_speed.predict(model_input, verbose=0)
-
-            tf.keras.backend.clear_session()
+            
+            predictions_arrays_acc = []
+            predictions_arrays_speed = []
+            
+            for i in range(9999999):
+                batch = np.array(segments[i*batch_size:i*batch_size+batch_size])
+                if len(batch) == 0:
+                    break
+                predictions_arrays_acc.extend(model_acc.predict_on_batch(batch))
+                predictions_arrays_speed.extend(model_speed.predict_on_batch(batch))
 
             notes = {
                 "columns": ["acc", "speed", "note_color", "is_dot", "note_time"],
@@ -625,4 +639,5 @@ def getMapComplexityForHits4(accs, speeds):
         top_comp = max(top_comp, curr)
         
     power = 3
-    return (sum([comp**power for comp in passing_averages])/len(passing_averages))**(1/power), sum(expected_accs)/len(expected_accs), top_comp, sum(expected_accs2)/len(expected_accs2)
+    ret_val = (sum([comp**power for comp in passing_averages])/len(passing_averages))**(1/power), sum(expected_accs)/len(expected_accs), top_comp, sum(expected_accs2)/len(expected_accs2)
+    return ret_val

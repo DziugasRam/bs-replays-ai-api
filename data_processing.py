@@ -195,8 +195,8 @@ def create_segments(notes):
     return segments, predictions
 
 
-pre_segment_size = 8
-post_segment_size = 8
+pre_segment_size = 12
+post_segment_size = 12
 prediction_size = 8
 note_size = 49
 
