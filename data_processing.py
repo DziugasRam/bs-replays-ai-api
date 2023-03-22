@@ -196,7 +196,7 @@ def get_note_direction(direction, angle):
 
 
 def get_map_notes_from_json(map_json, bpm_time_scale):
-    if map_json["version"] == "3.0.0":
+    if "version" in map_json and map_json["version"].split(".")[0] == "3":
         map_notes = sorted(list(map(lambda n: (n["b"]*bpm_time_scale, f"{n['x']}{n['y']}{get_note_direction(n['d'], n['a'])}{n['c']}"), filter(
                             lambda n: n['c'] == 1 or n['c'] == 0, map_json["colorNotes"]))), key=lambda x: (x[0], x[1]))
     else:
@@ -206,7 +206,7 @@ def get_map_notes_from_json(map_json, bpm_time_scale):
 
 
 def get_free_points_for_map(map_json):
-    if map_json["version"] == "3.0.0" and map_json["burstSliders"]:
+    if "version" in map_json and map_json["version"].split(".")[0] == "3" and map_json["burstSliders"]:
         segment_count = sum([burst_slider["sc"] for burst_slider in map_json["burstSliders"]])
         return segment_count*20*8
     else:
@@ -240,7 +240,7 @@ def get_map_data(hash, characteristic, difficulty):
                 if beatmap["_difficultyRank"] == difficulty:
                     njs = float(beatmap["_noteJumpMovementSpeed"])
                     map_file_name = beatmap["_beatmapFilename"]
-                    with open(map_info_file.replace("Info.dat", map_file_name), "r", encoding="utf8", errors="ignore") as map_file:
+                    with open(map_info_file.replace("Info.dat", map_file_name).replace("info.dat", map_file_name), "r", encoding="utf8", errors="ignore") as map_file:
                         map_file_content = map_file.read()
                         map_json = json.loads(map_file_content)
                         map_notes = get_map_notes_from_json(map_json, bpm_time_scale)
@@ -282,6 +282,6 @@ def get_map_info(hash, characteristic, difficulty):
             for beatmap in beatmap_set["_difficultyBeatmaps"]:
                 if beatmap["_difficultyRank"] == difficulty:
                     map_file_name = beatmap["_beatmapFilename"]
-                    with open(map_info_file.replace("Info.dat", map_file_name), "r", encoding="utf8", errors="ignore") as map_file:
+                    with open(map_info_file.replace("Info.dat", map_file_name).replace("info.dat", map_file_name), "r", encoding="utf8", errors="ignore") as map_file:
                         map_file_content = map_file.read()
                         return { "map_json": json.loads(map_file_content), "bpm": bpm }
