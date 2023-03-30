@@ -474,6 +474,8 @@ def diffToPass(swingData, bpm, hand, isuser=True):
     for i in range(1, len(swingData)):
         distanceDiff = swingData[i]['preDistance'] / (swingData[i]['preDistance'] + 3) + 1
         data.append({'swingSpeed': swingData[i]['frequency'] * distanceDiff * bps})
+        if swingData[i]['reset']:
+            data[-1]['swingSpeed'] *= 2
         xHitDist = swingData[i]['entryPos'][0] - swingData[i]['exitPos'][0]
         yHitDist = swingData[i]['entryPos'][1] - swingData[i]['exitPos'][1]
         data[-1]['hitDistance'] = math.sqrt((xHitDist**2) + (yHitDist**2))
