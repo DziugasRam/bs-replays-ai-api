@@ -54,6 +54,7 @@ def preprocess_note(delta, delta_other, note_info, njs, time_scale):
     delta = delta/time_scale
     delta_other = delta_other/time_scale
     njs = njs*time_scale
+    njs = min(njs, 25) # hotfix for model inaccuracies for 25njs+
 
     delta_long = max(0, 2 - delta)/2
     delta_other_long = max(0, 2 - delta_other)/2
